@@ -112,7 +112,7 @@ public class Control {
         }
 
         // Intentar conectar.
-        if (conectar(this.servidor, this.usuario, this.contrasenia)) {
+        if (conectar(this.servidor, this.usuario, this.contrasenia, this.clienteFtp)) {
 
             // Si se consigue conectar y listar los elementos muestra la ventana del cliente FTP.
             if (this.refrescarListado()) {
@@ -133,13 +133,13 @@ public class Control {
     }
 
     // Comprueba si la conexion se puede establecer.
-    private boolean conectar(String servidor, String usuario, String contrasenia) {
+    protected synchronized boolean conectar(String servidor, String usuario, String contrasenia, FTPClient cliente) {
         boolean correcto = false;
         try {
-            this.clienteFtp.connect(servidor);
-            correcto = clienteFtp.login(usuario, contrasenia);
+            cliente.connect(servidor);
+            correcto = cliente.login(usuario, contrasenia);
             if (correcto) {
-                this.clienteFtp.setFileType(FTPClient.BINARY_FILE_TYPE);
+                cliente.setFileType(FTPClient.BINARY_FILE_TYPE);
                 this.vLogueo.setEstado("Pulse en conectar cuando esté listo.");
             }
         } catch (IOException ex) {
@@ -187,29 +187,15 @@ public class Control {
      * descargar.
      */
     protected void bajarArchivos(List<String> nombreArchivos) {
+
         if (nombreArchivos.size() > 0) {
             this.vCliente.setEstado("Descargando archivos...");
-            String cadenaResultado = "";
-            String errores = "";
-            boolean correcto = true;
+            this.comprobarDirectorioDescargas();
 
             for (String nombreArchivo : nombreArchivos) {
-                this.comprobarDirectorioDescargas();
-                try (FileOutputStream escritorLocal = new FileOutputStream(carpetaDescargas.getName() + "\\" + nombreArchivo)) {
-                    if (!clienteFtp.retrieveFile(nombreArchivo, escritorLocal)) {
-                        correcto = false;
-                        errores += nombreArchivo + " ";
-                    }
-                } catch (Exception ex) {
-                    System.out.println("ERROR: " + ex);
-                }
-                if (correcto) {
-                    cadenaResultado = "Archivos descargados correctamente.";
-                } else {
-                    cadenaResultado += "Error al descargar los archivos: " + errores;
-                }
-                this.vCliente.setEstado(cadenaResultado);
+                crearHilo(new HiloGenerico(this, servidor, usuario, contrasenia, nombreArchivo, getRutaActualRemota()));
             }
+
         } else {
             this.vCliente.setEstado("No hay nada que descargar.");
         }
@@ -351,7 +337,7 @@ public class Control {
             } else {
                 this.vCliente.setEstado("No puedes meterte dentro de un archivo.");
             }
-            this.vCliente.setRutaDirectoriosRemoto(this.clienteFtp.printWorkingDirectory());
+            this.vCliente.setRutaDirectoriosRemoto(getRutaActualRemota());
         } catch (IOException ex) {
             System.out.println("ERROR: " + ex);
         }
@@ -382,11 +368,19 @@ public class Control {
      * Muestra la ruta actual remota.
      */
     private void actualizarRutaActualFtp() {
+        this.vCliente.setRutaDirectoriosRemoto(getRutaActualRemota());
+    }
+    
+    protected String getRutaActualRemota() {
         try {
-            this.vCliente.setRutaDirectoriosRemoto(this.clienteFtp.printWorkingDirectory());
+            return this.clienteFtp.printWorkingDirectory();
         } catch (IOException ex) {
-            Logger.getLogger(Control.class.getName()).log(Level.SEVERE, null, ex);
+            return null;
         }
+    }
+
+    protected void setMensajeCliente(String mensaje) {
+        this.vCliente.setEstado(mensaje);
     }
 
     /**
@@ -394,6 +388,11 @@ public class Control {
      */
     public void mostrarInfoFtp() {
         System.out.println("INFO FTP: " + this.clienteFtp.getReplyString());
+    }
+
+    private void crearHilo(HiloGenerico objetoHilo) {
+        Thread hilo = new Thread(objetoHilo);
+        hilo.start();
     }
 
     /**

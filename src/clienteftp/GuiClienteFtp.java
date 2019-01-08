@@ -6,8 +6,8 @@ import java.awt.GridLayout;
 import java.awt.Toolkit;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
+import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
-import java.awt.event.MouseListener;
 import java.awt.event.WindowAdapter;
 import java.awt.event.WindowEvent;
 import java.io.File;
@@ -258,7 +258,7 @@ public class GuiClienteFtp extends JFrame {
                 pbProgreso.setStringPainted(true);
             }
         });
-        
+
         // Botón descargar.
         this.btnDescargar.addActionListener(new ActionListener() {
             @Override
@@ -266,7 +266,7 @@ public class GuiClienteFtp extends JFrame {
                 padre.bajarArchivos(listadoElementos.getSelectedValuesList());
             }
         });
-        
+
         // Botón eliminar.
         this.btnEliminar.addActionListener(new ActionListener() {
             @Override
@@ -274,7 +274,7 @@ public class GuiClienteFtp extends JFrame {
                 padre.eliminarArchivoDirectorio(listadoElementos.getSelectedValuesList());
             }
         });
-        
+
         // Botón crear directorio.
         this.btnCrearDirectorio.addActionListener(new ActionListener() {
             @Override
@@ -287,7 +287,7 @@ public class GuiClienteFtp extends JFrame {
                 }
             }
         });
-        
+
         // Botón refrescar.
         this.btnRefrescar.addActionListener(new ActionListener() {
             @Override
@@ -296,7 +296,7 @@ public class GuiClienteFtp extends JFrame {
                 setEstado("Refrescado correctamente.");
             }
         });
-        
+
         // Botón desconectar.
         this.btnDesconectar.addActionListener(new ActionListener() {
             @Override
@@ -304,9 +304,9 @@ public class GuiClienteFtp extends JFrame {
                 GuiClienteFtp.this.padre.pulsadoDesconectar();
             }
         });
-        
+
         // Eventos del ratón.
-        this.listadoElementos.addMouseListener(new MouseListener() {
+        this.listadoElementos.addMouseListener(new MouseAdapter() {
             @Override
             public void mouseClicked(MouseEvent me) {
 
@@ -319,22 +319,6 @@ public class GuiClienteFtp extends JFrame {
                 if (me.getButton() == 3) {
                     padre.volverDirectorioAnterior();
                 }
-            }
-
-            @Override
-            public void mousePressed(MouseEvent me) {
-            }
-
-            @Override
-            public void mouseReleased(MouseEvent me) {
-            }
-
-            @Override
-            public void mouseEntered(MouseEvent me) {
-            }
-
-            @Override
-            public void mouseExited(MouseEvent me) {
             }
         });
 
