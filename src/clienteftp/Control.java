@@ -7,8 +7,6 @@ import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.util.List;
-import java.util.logging.Level;
-import java.util.logging.Logger;
 import org.apache.commons.net.ftp.FTPClient;
 import org.apache.commons.net.ftp.FTPFile;
 
@@ -28,6 +26,12 @@ public class Control {
     private String usuario;
     private String contrasenia;
     private FTPClient clienteFtp;
+    private HiloGenerico[] grupoDescarga;
+    private HiloGenerico hiloConexion;
+    private boolean descargando;
+    private boolean intentantoConectar;
+    private int numeroArchivosDescargados;
+    private int numeroArchivosADescargar;
 
     /**
      * Contructor de la clase control. Se encarga de dejar todos los elementos
@@ -40,7 +44,9 @@ public class Control {
         this.vCliente = new GuiClienteFtp(this);
         this.cargarDatosSesionAnterior();
         this.vLogueo.mostrar(true);
-        this.clienteFtp = new FTPClient();
+        this.descargando = false;
+        this.intentantoConectar = false;
+        this.numeroArchivosADescargar = 0;
     }
 
     // Comprueba si existe la carpeta de descargas y si no la crea.
@@ -95,57 +101,83 @@ public class Control {
      * Obtiene los datos de sesión e intenta conectarse.
      */
     protected void pulsadoConectar() {
-        // Obtener servidor.
-        this.servidor = this.vLogueo.getServidor().trim();
+        if (this.intentantoConectar) {
+            this.hiloConexion.desconectarHilo();
 
-        // Obtener usuario.
-        this.usuario = this.vLogueo.getUsuario().trim();
-        if (this.usuario.equals("")) {
-            this.usuario = "Anonimous";
+            // Indico que estoy cancelando la conexión.
+            this.intentantoConectar = false;
+            this.vLogueo.setIntentandoConectar(false);
+            this.vLogueo.setEstado("Has cancelado la conexion.");
+
+        } else {
+            // Obtener servidor.
+            this.servidor = this.vLogueo.getServidor().trim();
+
+            if (this.servidor.isEmpty()) {
+                this.vLogueo.setEstado("No has definido un servidor.");
+            } else {
+                // Indico que estoy intentando conectarme.
+                this.intentantoConectar = true;
+                this.vLogueo.setIntentandoConectar(true);
+
+                // Obtener usuario.
+                this.usuario = this.vLogueo.getUsuario().trim();
+                if (this.usuario.equals("")) {
+                    this.usuario = "Anonimous";
+                    this.vLogueo.setUsuario(this.usuario);
+                }
+
+                // Obtener contraseña.
+                char[] pass = this.vLogueo.getContrasenia();
+                this.contrasenia = "";
+                for (char c : pass) {
+                    this.contrasenia += c;
+                }
+
+                // Crea un hilo para conectar.
+                this.vLogueo.setEstado("Intentando conectar, espera un momento.");
+                this.hiloConexion = new HiloGenerico(this, servidor, usuario, contrasenia);
+                this.crearHilo(this.hiloConexion);
+            }
+
         }
 
-        // Obtener contraseña.
-        char[] pass = this.vLogueo.getContrasenia();
-        this.contrasenia = "";
-        for (char c : pass) {
-            this.contrasenia += c;
-        }
+    }
 
+    /**
+     * Obtiene un resultado enviado por el hilo genérico. Null si no se ha
+     * podido realizar la conexión o una instancia de FPTClient si ha conseguido
+     * conectarse y loguearse.
+     *
+     * @param cliente El cliente FTP o null si no ha logrado conectar y loguear.
+     */
+    protected void resultadoConexion(FTPClient cliente) {
         // Intentar conectar.
-        if (conectar(this.servidor, this.usuario, this.contrasenia, this.clienteFtp)) {
-
+        if (!(cliente == null)) {
             // Si se consigue conectar y listar los elementos muestra la ventana del cliente FTP.
+            this.clienteFtp = cliente;
             if (this.refrescarListado()) {
-                vLogueo.mostrar(false);
+                this.intentantoConectar = false;
+                this.vLogueo.setIntentandoConectar(false);
                 this.vCliente.setEstado("Conectado.");
                 this.vCliente.setNombreServidor(this.servidor);
                 this.vCliente.setNombreUsuario(this.usuario);
                 this.actualizarRutaActualFtp();
+                this.vLogueo.mostrar(false);
                 this.vCliente.mostrar(true);
+                this.vLogueo.setEstado("Pulsa en conectar para volver a conectar de nuevo.");
                 this.guardarDatosSesionAnterior();
             } else {
                 this.vLogueo.setEstado("Fallo listar elementos, comprueba el cortafuegos.");
+                this.intentantoConectar = false;
+                this.vLogueo.setIntentandoConectar(false);
             }
 
         } else {
             this.vLogueo.setEstado("Fallo al conectar.");
+            this.intentantoConectar = false;
+            this.vLogueo.setIntentandoConectar(false);
         }
-    }
-
-    // Comprueba si la conexion se puede establecer.
-    protected synchronized boolean conectar(String servidor, String usuario, String contrasenia, FTPClient cliente) {
-        boolean correcto = false;
-        try {
-            cliente.connect(servidor);
-            correcto = cliente.login(usuario, contrasenia);
-            if (correcto) {
-                cliente.setFileType(FTPClient.BINARY_FILE_TYPE);
-                this.vLogueo.setEstado("Pulse en conectar cuando esté listo.");
-            }
-        } catch (IOException ex) {
-            System.out.println("ERROR: " + ex);
-        }
-        return correcto;
     }
 
     /**
@@ -188,18 +220,64 @@ public class Control {
      */
     protected void bajarArchivos(List<String> nombreArchivos) {
 
-        if (nombreArchivos.size() > 0) {
-            this.vCliente.setEstado("Descargando archivos...");
-            this.comprobarDirectorioDescargas();
-
-            for (String nombreArchivo : nombreArchivos) {
-                crearHilo(new HiloGenerico(this, servidor, usuario, contrasenia, nombreArchivo, getRutaActualRemota()));
-            }
-
+        // Cancelar descarga.
+        if (this.descargando) {
+            this.anularDescargas();
+            // Empezar descargar si hay algo seleccionado.
         } else {
-            this.vCliente.setEstado("No hay nada que descargar.");
+            if (nombreArchivos.size() > 0) {
+                this.descargando = true;
+                this.vCliente.setDescargando(true);
+                this.vCliente.setEstado("Descargando archivos...");
+                this.comprobarDirectorioDescargas();
+                this.grupoDescarga = new HiloGenerico[nombreArchivos.size()];
+                this.numeroArchivosADescargar = nombreArchivos.size();
+                HiloGenerico hiloTemporal;
+
+                int i = 0;
+                for (String nombreArchivo : nombreArchivos) {
+                    hiloTemporal = new HiloGenerico(this, servidor, usuario, contrasenia, nombreArchivo, getRutaActualRemota());
+                    grupoDescarga[i] = hiloTemporal;
+                    crearHilo(hiloTemporal);
+                    i++;
+                }
+
+            } else {
+                this.vCliente.setEstado("No hay nada que descargar.");
+            }
         }
+
         this.refrescarListado();
+    }
+
+    private void anularDescargas() {
+        this.descargando = false;
+        this.vCliente.setDescargando(false);
+        this.desconectarHilos(this.grupoDescarga);
+        this.numeroArchivosADescargar = 0;
+        this.numeroArchivosDescargados = 0;
+        this.vCliente.setEstado("Descargas canceladas.");
+        System.out.println("Descargas anuladas.");
+    }
+
+    /**
+     * Notifica que el archivo ha sido descargado, para llevar el control.
+     */
+    protected synchronized void archivoDescargado(boolean valor) {
+        if (valor) {
+            this.numeroArchivosDescargados++;
+        } else {
+            this.numeroArchivosADescargar -= 1;
+        }
+        
+        if (numeroArchivosDescargados >= numeroArchivosADescargar && this.descargando == true) {
+            this.numeroArchivosDescargados = 0;
+            this.descargando = false;
+            this.vCliente.setDescargando(false);
+            
+            this.vCliente.setEstado("Archivos descargados correctamente.");
+            System.out.println("Todo descargado.\n");
+        }
     }
 
     /**
@@ -321,6 +399,9 @@ public class Control {
         this.desconectar();
         this.vCliente.dispose();
         this.vLogueo.mostrar(true);
+
+        System.out.println("Accion: desconectar");
+        this.anularDescargas();
     }
 
     /**
@@ -370,7 +451,7 @@ public class Control {
     private void actualizarRutaActualFtp() {
         this.vCliente.setRutaDirectoriosRemoto(getRutaActualRemota());
     }
-    
+
     protected String getRutaActualRemota() {
         try {
             return this.clienteFtp.printWorkingDirectory();
@@ -393,6 +474,15 @@ public class Control {
     private void crearHilo(HiloGenerico objetoHilo) {
         Thread hilo = new Thread(objetoHilo);
         hilo.start();
+    }
+
+    // Avisa a todos los hilos pasados por parámetro que han de dejar lo que estén haciendo.
+    private void desconectarHilos(HiloGenerico[] grupoHilos) {
+        if (!(grupoHilos == null)) {
+            for (HiloGenerico h : grupoHilos) {
+                h.desconectarHilo();
+            }
+        }
     }
 
     /**
