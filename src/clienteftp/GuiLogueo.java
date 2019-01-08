@@ -39,6 +39,7 @@ public class GuiLogueo extends JFrame {
     protected static final Color COLOR_FONDO_VACIO = new Color(250, 240, 220);
     protected static final Color COLOR_CAMPOS = new Color(234, 255, 235);
     protected static final Color COLOR_BOTONES = new Color(250, 217, 183);
+    protected static final Color COLOR_BOTONES_CANCELAR = new Color(250, 190, 190);
     protected static final Color COLOR_LETRA = new Color(255, 255, 255);
     protected static final Cursor CURSOR_BOTONES = new Cursor(Cursor.HAND_CURSOR);
 
@@ -98,7 +99,6 @@ public class GuiLogueo extends JFrame {
         this.passContrasenia.setToolTipText("Contraseña de usuario *Pulsa INTRO para ver/ocultar la contraseña");
         this.btnLimpiar.setToolTipText("Vacia todos los campos de texto");
         this.btnCargarSesion.setToolTipText("Carga la sesión anterior si la hay");
-        this.btnConectar.setToolTipText("Intenta conectar con el servidor ftp");
         this.btnSalir.setToolTipText("Sale de la aplicación");
     }
 
@@ -107,7 +107,6 @@ public class GuiLogueo extends JFrame {
         this.setIconImage(Toolkit.getDefaultToolkit().getImage(GuiLogueo.class.getResource("/recursos/icono.png")));
         this.btnLimpiar.setIcon(new ImageIcon(getClass().getResource("/recursos/limpiar.png")));
         this.btnCargarSesion.setIcon(new ImageIcon(getClass().getResource("/recursos/cargar.png")));
-        this.btnConectar.setIcon(new ImageIcon(getClass().getResource("/recursos/conectar.png")));
         this.btnSalir.setIcon(new ImageIcon(getClass().getResource("/recursos/salir.png")));
         this.pnlCentro.setBorder(BorderFactory.createEmptyBorder(5, 5, 5, 5));
         this.pnlSur.setBorder(BorderFactory.createEmptyBorder(5, 5, 5, 5));
@@ -121,7 +120,7 @@ public class GuiLogueo extends JFrame {
         this.pnlSur.setBackground(COLOR_FONDO2);
         this.btnLimpiar.setBackground(COLOR_BOTONES);
         this.btnCargarSesion.setBackground(COLOR_BOTONES);
-        this.btnConectar.setBackground(COLOR_BOTONES);
+        this.setIntentandoConectar(false);
         this.btnSalir.setBackground(COLOR_BOTONES);
         this.btnLimpiar.setCursor(CURSOR_BOTONES);
         this.btnCargarSesion.setCursor(CURSOR_BOTONES);
@@ -242,6 +241,29 @@ public class GuiLogueo extends JFrame {
      */
     protected void setEstado(String estado) {
         this.lblEstado.setText(estado);
+    }
+    
+    /**
+     * Si está intentando conectar mostrará una cosa en caso contrario otra.
+     *
+     * @param conectando true si está conectando, false si no.
+     */
+    protected void setIntentandoConectar(boolean conectando) {
+        if (conectando) {
+            this.btnConectar.setText("Conectando...");
+            this.btnConectar.setToolTipText("Dejar de intentarlo.");
+            this.btnConectar.setIcon(new ImageIcon(getClass().getResource("/recursos/cancelar.png")));
+            this.btnConectar.setBackground(GuiLogueo.COLOR_BOTONES_CANCELAR);
+            this.btnLimpiar.setEnabled(false);
+            this.btnCargarSesion.setEnabled(false);
+        } else {
+            this.btnConectar.setText("Conectar");
+            this.btnConectar.setToolTipText("Intenta conectar con el servidor ftp");
+            this.btnConectar.setIcon(new ImageIcon(getClass().getResource("/recursos/conectar.png")));
+            this.btnConectar.setBackground(GuiLogueo.COLOR_BOTONES);
+            this.btnLimpiar.setEnabled(true);
+            this.btnCargarSesion.setEnabled(true);
+        }
     }
 
     /**

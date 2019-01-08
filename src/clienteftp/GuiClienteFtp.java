@@ -57,7 +57,7 @@ public class GuiClienteFtp extends JFrame {
         this.aniadirElementos();
         this.eventos();
 
-        this.setSize(600, 400);
+        this.setSize(700, 400);
         this.setLocationRelativeTo(null);
         this.setAlwaysOnTop(true);
     }
@@ -90,7 +90,7 @@ public class GuiClienteFtp extends JFrame {
     private void definirTexto() {
         this.setTitle("Conexión a servidor FTP");
         this.btnSubir.setText("Subir");
-        this.btnDescargar.setText("Descargar");
+        this.setDescargando(false);
         this.btnEliminar.setText("Eliminar");
         this.btnCrearDirectorio.setText("Crear directorio");
         this.btnRefrescar.setText("Refrescar");
@@ -100,7 +100,6 @@ public class GuiClienteFtp extends JFrame {
     // Define los textos que se mostrarán al colocar el mouse sobre algun elemento.
     private void definirTextoAyuda() {
         this.btnSubir.setToolTipText("Selecciona el archivo/s que deseas subir");
-        this.btnDescargar.setToolTipText("Descarga los archivos seleccionados en la ruta " + this.padre.getRutaCompletaDescargas());
         this.btnEliminar.setToolTipText("Elimina los archivos y directorios seleccionados");
         this.btnCrearDirectorio.setToolTipText("Crea una nueva carpeta en el directorio remoto del servidor ftp");
         this.btnRefrescar.setToolTipText("Refrescar listado de directorios y archivos");
@@ -111,7 +110,6 @@ public class GuiClienteFtp extends JFrame {
     private void definirEstilo() {
         this.setIconImage(Toolkit.getDefaultToolkit().getImage(GuiClienteFtp.class.getResource("/recursos/icono.png")));
         this.btnSubir.setIcon(new ImageIcon(getClass().getResource("/recursos/subir.png")));
-        this.btnDescargar.setIcon(new ImageIcon(getClass().getResource("/recursos/descargar.png")));
         this.btnEliminar.setIcon(new ImageIcon(getClass().getResource("/recursos/eliminar.png")));
         this.btnCrearDirectorio.setIcon(new ImageIcon(getClass().getResource("/recursos/crear.png")));
         this.btnRefrescar.setIcon(new ImageIcon(getClass().getResource("/recursos/limpiar.png")));
@@ -131,7 +129,6 @@ public class GuiClienteFtp extends JFrame {
         this.pnlGlobalSur.setBackground(GuiLogueo.COLOR_FONDO2);
         this.pnlGlobal.setBackground(GuiLogueo.COLOR_FONDO2);
         this.btnSubir.setBackground(GuiLogueo.COLOR_BOTONES);
-        this.btnDescargar.setBackground(GuiLogueo.COLOR_BOTONES);
         this.btnEliminar.setBackground(GuiLogueo.COLOR_BOTONES);
         this.btnCrearDirectorio.setBackground(GuiLogueo.COLOR_BOTONES);
         this.btnRefrescar.setBackground(GuiLogueo.COLOR_BOTONES);
@@ -185,6 +182,25 @@ public class GuiClienteFtp extends JFrame {
      */
     public void mostrar(boolean valor) {
         this.setVisible(valor);
+    }
+
+    /**
+     * Si está descargando mostrará una cosa en caso contrario otra.
+     *
+     * @param descargando true si está descargando, false si no.
+     */
+    protected void setDescargando(boolean descargando) {
+        if (descargando) {
+            this.btnDescargar.setText("Cancelar descarga");
+            this.btnDescargar.setToolTipText("Cancela todas las descargas");
+            this.btnDescargar.setIcon(new ImageIcon(getClass().getResource("/recursos/cancelar.png")));
+            this.btnDescargar.setBackground(GuiLogueo.COLOR_BOTONES_CANCELAR);
+        } else {
+            this.btnDescargar.setText("Descargar");
+            this.btnDescargar.setToolTipText("Descarga los archivos seleccionados en la ruta " + this.padre.getRutaCompletaDescargas());
+            this.btnDescargar.setIcon(new ImageIcon(getClass().getResource("/recursos/descargar.png")));
+            this.btnDescargar.setBackground(GuiLogueo.COLOR_BOTONES);
+        }
     }
 
     /**

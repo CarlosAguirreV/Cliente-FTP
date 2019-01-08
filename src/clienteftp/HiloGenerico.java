@@ -19,19 +19,24 @@ public class HiloGenerico implements Runnable {
     private Control padre;
     private byte accion;
     private String nombreArchivo, rutaActual;
+    private String servidor, usuario, contrasenia;
+    private boolean fin;
 
     // 0 - Conectar.
     public HiloGenerico(Control padre, String servidor, String usuario, String contrasenia) {
         this.padre = padre;
+        this.servidor = servidor;
+        this.usuario = usuario;
+        this.contrasenia = contrasenia;
         this.clienteFtp = new FTPClient();
-        this.padre.conectar(servidor, usuario, contrasenia, clienteFtp);
         this.accion = 0;
+        this.fin = false;
     }
 
     // 1 - Subir.
     public HiloGenerico(Control padre, String servidor, String usuario, String contrasenia, File archivoSeleccionado, String rutaActual) {
         this(padre, servidor, usuario, contrasenia);
-        setRutaActualRemota(rutaActual);
+        this.rutaActual = rutaActual;
         this.accion = 1;
     }
 
@@ -39,34 +44,56 @@ public class HiloGenerico implements Runnable {
     public HiloGenerico(Control padre, String servidor, String usuario, String contrasenia, String nombreArchivo, String rutaActual) {
         this(padre, servidor, usuario, contrasenia);
         this.nombreArchivo = nombreArchivo;
-        setRutaActualRemota(rutaActual);
+        this.rutaActual = rutaActual;
         this.accion = 2;
+    }
+
+    // Comprueba si la conexion se puede establecer.
+    protected synchronized boolean conectar(String servidor, String usuario, String contrasenia, FTPClient cliente) {
+        boolean correcto = false;
+        try {
+            cliente.connect(servidor);
+            correcto = cliente.login(usuario, contrasenia);
+            if (correcto) {
+                cliente.setFileType(FTPClient.BINARY_FILE_TYPE);
+            }
+        } catch (IOException ex) {
+            System.out.println("ERROR: " + ex);
+        }
+        return correcto;
+    }
+
+    /**
+     * Lo uso para interrumpir la operación que esté realizando.
+     */
+    protected void desconectarHilo() {
+        try {
+            this.fin = true;
+            this.clienteFtp.disconnect();
+        } catch (IOException ex) {
+            System.out.println("ERROR al desconectar el hilo." + ex);
+        }
     }
 
     private void descargar() {
         String cadenaResultado = "";
-        String errores = "";
         boolean correcto = true;
 
-        
-        System.out.println(padre.getRutaActualRemota() + "/" + nombreArchivo);
-        
-        
-        
-        try (FileOutputStream escritorLocal = new FileOutputStream(padre.getRutaCompletaDescargas() + "\\" +  nombreArchivo)) {
+        try (FileOutputStream escritorLocal = new FileOutputStream(padre.getRutaCompletaDescargas() + "\\" + nombreArchivo)) {
             if (!clienteFtp.retrieveFile(nombreArchivo, escritorLocal)) {
                 correcto = false;
-                errores += nombreArchivo + " ";
             }
+            // Cuando fuerzo a desconectar el cliente FTP llega a este punto.
         } catch (Exception ex) {
-            System.out.println("ERROR: " + ex);
+            System.out.println("ERROR al descargar, es normal si desconecto las sesiones de los hilos: " + ex);
         }
         if (correcto) {
-            cadenaResultado = "Archivos descargados correctamente."; // ESTA YA NO VA A AQUÍ.
+            padre.archivoDescargado(true);
         } else {
-            cadenaResultado += "Error al descargar los archivos: " + errores;
+            cadenaResultado += "Error al descargar el elemento: " + nombreArchivo;
+            padre.archivoDescargado(false);
+            this.padre.setMensajeCliente(cadenaResultado);
         }
-        this.padre.setMensajeCliente(cadenaResultado);
     }
 
     private void setRutaActualRemota(String ruta) {
@@ -79,16 +106,29 @@ public class HiloGenerico implements Runnable {
 
     @Override
     public void run() {
+        // Antes que nada conecta:
+        boolean estoyLogueado = this.conectar(servidor, usuario, contrasenia, clienteFtp);
+
         switch (accion) {
             case 0: // Conectar.
-                System.out.println("CONECTAR");
+                System.out.println("Accion: conectar");
+                if (!fin) {
+                    if (this.clienteFtp.isConnected() && estoyLogueado) {
+                        this.padre.resultadoConexion(this.clienteFtp);
+                    } else {
+                        this.padre.resultadoConexion(null);
+                    }
+                }
+
                 break;
             case 1: // Subir.
-                System.out.println("SUBIR");
+                System.out.println("Accion: subir");
+                this.setRutaActualRemota(rutaActual);
                 break;
             case 2: // Descargar.
-                System.out.println("DESCARGAR");
-                descargar();
+                System.out.println("Accion: descargar " + nombreArchivo);
+                this.setRutaActualRemota(rutaActual);
+                this.descargar();
                 break;
         }
     }
