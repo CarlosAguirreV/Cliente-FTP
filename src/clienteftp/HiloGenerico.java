@@ -1,6 +1,7 @@
 package clienteftp;
 
 import java.io.File;
+import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.util.logging.Level;
@@ -11,6 +12,7 @@ import org.apache.commons.net.ftp.FTPClient;
  * Clase HiloGenerico. Permite crear conexiones paralelas al servidor. Permite
  * conectar, descargar y subir archivos.
  *
+ * @since 14/01/2019
  * @author Carlos Aguirre Vozmediano
  */
 public class HiloGenerico implements Runnable {
@@ -18,6 +20,7 @@ public class HiloGenerico implements Runnable {
     private FTPClient clienteFtp;
     private Control padre;
     private byte accion;
+    private File archivo;
     private String nombreArchivo, rutaActual;
     private String servidor, usuario, contrasenia;
     private boolean fin;
@@ -34,17 +37,18 @@ public class HiloGenerico implements Runnable {
     }
 
     // 1 - Subir.
-    public HiloGenerico(Control padre, String servidor, String usuario, String contrasenia, File archivoSeleccionado, String rutaActual) {
+    public HiloGenerico(Control padre, String servidor, String usuario, String contrasenia, File archivoSeleccionado, String rutaActualRemota) {
         this(padre, servidor, usuario, contrasenia);
-        this.rutaActual = rutaActual;
+        this.archivo = archivoSeleccionado;
+        this.rutaActual = rutaActualRemota;
         this.accion = 1;
     }
 
     // 2 - Descargar.
-    public HiloGenerico(Control padre, String servidor, String usuario, String contrasenia, String nombreArchivo, String rutaActual) {
+    public HiloGenerico(Control padre, String servidor, String usuario, String contrasenia, String nombreArchivo, String rutaActualLocal) {
         this(padre, servidor, usuario, contrasenia);
         this.nombreArchivo = nombreArchivo;
-        this.rutaActual = rutaActual;
+        this.rutaActual = rutaActualLocal;
         this.accion = 2;
     }
 
@@ -75,6 +79,28 @@ public class HiloGenerico implements Runnable {
         }
     }
 
+    private void subir() {
+        String cadenaResultado = "";
+        boolean correcto = true;
+
+        try (FileInputStream escritorRemoto = new FileInputStream(archivo.getPath())) {
+            if (!clienteFtp.storeFile(archivo.getName(), escritorRemoto)) {
+                correcto = false;
+            }
+        } catch (Exception ex) {
+            correcto = false;
+            System.out.println("ERROR al descargar, es normal si desconecto las sesiones de los hilos: " + ex);
+        }
+
+        if (correcto) {
+            padre.archivoSubido(true);
+        } else if (!this.fin) {
+            cadenaResultado += "Error al subir el elemento: " + archivo.getName();
+            padre.archivoSubido(false);
+            padre.setMensajeCliente(cadenaResultado);
+        }
+    }
+
     private void descargar() {
         String cadenaResultado = "";
         boolean correcto = true;
@@ -85,14 +111,16 @@ public class HiloGenerico implements Runnable {
             }
             // Cuando fuerzo a desconectar el cliente FTP llega a este punto.
         } catch (Exception ex) {
+            correcto = false;
             System.out.println("ERROR al descargar, es normal si desconecto las sesiones de los hilos: " + ex);
         }
+
         if (correcto) {
             padre.archivoDescargado(true);
-        } else {
+        } else if (!this.fin) {
             cadenaResultado += "Error al descargar el elemento: " + nombreArchivo;
             padre.archivoDescargado(false);
-            this.padre.setMensajeCliente(cadenaResultado);
+            padre.setMensajeCliente(cadenaResultado);
         }
     }
 
@@ -119,12 +147,14 @@ public class HiloGenerico implements Runnable {
                         this.padre.resultadoConexion(null);
                     }
                 }
-
                 break;
+
             case 1: // Subir.
                 System.out.println("Accion: subir");
                 this.setRutaActualRemota(rutaActual);
+                this.subir();
                 break;
+
             case 2: // Descargar.
                 System.out.println("Accion: descargar " + nombreArchivo);
                 this.setRutaActualRemota(rutaActual);

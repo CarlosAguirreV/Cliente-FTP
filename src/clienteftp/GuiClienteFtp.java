@@ -27,7 +27,7 @@ import javax.swing.JScrollPane;
 /**
  * Clase GuiClienteFtp. Interactua con el servidor FTP.
  *
- * @since 05/01/2019
+ * @since 14/01/2019
  * @author Carlos Aguirre Vozmediano
  */
 public class GuiClienteFtp extends JFrame {
@@ -84,13 +84,14 @@ public class GuiClienteFtp extends JFrame {
         this.lblEstado = new JLabel();
         this.pbProgreso = new JProgressBar(0, 100);
         this.escogedorArchivos = new JFileChooser();
+        this.escogedorArchivos.setMultiSelectionEnabled(true);
     }
 
     // Define el texto de todos los elementos.
     private void definirTexto() {
         this.setTitle("Conexión a servidor FTP");
-        this.btnSubir.setText("Subir");
         this.setDescargando(false);
+        this.setSubiendo(false);
         this.btnEliminar.setText("Eliminar");
         this.btnCrearDirectorio.setText("Crear directorio");
         this.btnRefrescar.setText("Refrescar");
@@ -99,7 +100,6 @@ public class GuiClienteFtp extends JFrame {
 
     // Define los textos que se mostrarán al colocar el mouse sobre algun elemento.
     private void definirTextoAyuda() {
-        this.btnSubir.setToolTipText("Selecciona el archivo/s que deseas subir");
         this.btnEliminar.setToolTipText("Elimina los archivos y directorios seleccionados");
         this.btnCrearDirectorio.setToolTipText("Crea una nueva carpeta en el directorio remoto del servidor ftp");
         this.btnRefrescar.setToolTipText("Refrescar listado de directorios y archivos");
@@ -109,7 +109,6 @@ public class GuiClienteFtp extends JFrame {
     // Define los estilos de todos los elementos de la interfaz, colores, iconos y bordes.
     private void definirEstilo() {
         this.setIconImage(Toolkit.getDefaultToolkit().getImage(GuiClienteFtp.class.getResource("/recursos/icono.png")));
-        this.btnSubir.setIcon(new ImageIcon(getClass().getResource("/recursos/subir.png")));
         this.btnEliminar.setIcon(new ImageIcon(getClass().getResource("/recursos/eliminar.png")));
         this.btnCrearDirectorio.setIcon(new ImageIcon(getClass().getResource("/recursos/crear.png")));
         this.btnRefrescar.setIcon(new ImageIcon(getClass().getResource("/recursos/limpiar.png")));
@@ -121,14 +120,13 @@ public class GuiClienteFtp extends JFrame {
         this.pnlGlobalSur.setBorder(BorderFactory.createEmptyBorder(5, 0, 0, 0));
         this.pnlCentroNorte.setBorder(BorderFactory.createEmptyBorder(5, 5, 5, 5));
         this.pnlGlobalCentro.setBorder(BorderFactory.createEmptyBorder(5, 5, 5, 5));
-        this.pbProgreso.setForeground(GuiLogueo.COLOR_BOTONES);
+        this.pbProgreso.setForeground(GuiLogueo.COLOR_BARRA_PROGRESO);
         this.pbProgreso.setBackground(GuiLogueo.COLOR_CAMPOS);
         this.pnlCentroNorteA.setBackground(GuiLogueo.COLOR_FONDO);
         this.pnlCentroNorte.setBackground(GuiLogueo.COLOR_FONDO);
         this.pnlGlobalEste.setBackground(GuiLogueo.COLOR_FONDO2);
         this.pnlGlobalSur.setBackground(GuiLogueo.COLOR_FONDO2);
         this.pnlGlobal.setBackground(GuiLogueo.COLOR_FONDO2);
-        this.btnSubir.setBackground(GuiLogueo.COLOR_BOTONES);
         this.btnEliminar.setBackground(GuiLogueo.COLOR_BOTONES);
         this.btnCrearDirectorio.setBackground(GuiLogueo.COLOR_BOTONES);
         this.btnRefrescar.setBackground(GuiLogueo.COLOR_BOTONES);
@@ -139,7 +137,6 @@ public class GuiClienteFtp extends JFrame {
         this.btnCrearDirectorio.setCursor(GuiLogueo.CURSOR_BOTONES);
         this.btnDesconectar.setCursor(GuiLogueo.CURSOR_BOTONES);
         this.lblEstado.setForeground(GuiLogueo.COLOR_LETRA);
-        this.pbProgreso.setStringPainted(false);
     }
 
     // Crea las distintas distribuciones para los distintos paneles.
@@ -204,6 +201,25 @@ public class GuiClienteFtp extends JFrame {
     }
 
     /**
+     * Si está subiendo archivos mostrará una cosa en caso contrario otra.
+     *
+     * @param subiendo true si están subiendo archivos, false si no.
+     */
+    protected void setSubiendo(boolean subiendo) {
+        if (subiendo) {
+            this.btnSubir.setText("Cancelar subida");
+            this.btnSubir.setToolTipText("Cancela todas subidas");
+            this.btnSubir.setIcon(new ImageIcon(getClass().getResource("/recursos/cancelar.png")));
+            this.btnSubir.setBackground(GuiLogueo.COLOR_BOTONES_CANCELAR);
+        } else {
+            this.btnSubir.setText("Subir");
+            this.btnSubir.setToolTipText("Selecciona el archivo/s que deseas subir");
+            this.btnSubir.setIcon(new ImageIcon(getClass().getResource("/recursos/subir.png")));
+            this.btnSubir.setBackground(GuiLogueo.COLOR_BOTONES);
+        }
+    }
+
+    /**
      * Muestra el nombre del servidor, su dirección IP.
      *
      * @param nombre Direccion del servidor.
@@ -254,7 +270,31 @@ public class GuiClienteFtp extends JFrame {
                 this.modeloLista.addElement(nombre);
             }
         }
+    }
 
+    /**
+     * Abre una ventana de seleccion de archivos.
+     *
+     * @return Los archivos seleccionados o null si no se ha seleccionado nada.
+     */
+    protected File[] seleccionarArchivos() {
+        int botonPulsado = escogedorArchivos.showDialog(GuiClienteFtp.this, "Seleccionar el archivo/s");
+        if (botonPulsado == JFileChooser.APPROVE_OPTION) {
+            return escogedorArchivos.getSelectedFiles();
+        } else {
+            return null;
+        }
+    }
+
+    /**
+     * Avtualiza la barra de progreso.
+     *
+     * @param valorMax Valor limite de la barra de progreso.
+     * @param valorProgreso Valor actual.
+     */
+    protected void actualizarProgreso(int valorMax, int valorProgreso) {
+        this.pbProgreso.setMaximum(valorMax);
+        this.pbProgreso.setValue(valorProgreso);
     }
 
     /**
@@ -265,13 +305,7 @@ public class GuiClienteFtp extends JFrame {
         this.btnSubir.addActionListener(new ActionListener() {
             @Override
             public void actionPerformed(ActionEvent ae) {
-                escogedorArchivos.setMultiSelectionEnabled(true);
-                int botonPulsado = escogedorArchivos.showDialog(GuiClienteFtp.this, "Seleccionar el archivo/s");
-                if (botonPulsado == JFileChooser.APPROVE_OPTION) {
-                    File[] archivos = escogedorArchivos.getSelectedFiles();
-                    padre.subirArchivos(archivos);
-                }
-                pbProgreso.setStringPainted(true);
+                padre.pulsadoSubir();
             }
         });
 
@@ -279,7 +313,7 @@ public class GuiClienteFtp extends JFrame {
         this.btnDescargar.addActionListener(new ActionListener() {
             @Override
             public void actionPerformed(ActionEvent ae) {
-                padre.bajarArchivos(listadoElementos.getSelectedValuesList());
+                padre.pulsadoDescargar(listadoElementos.getSelectedValuesList());
             }
         });
 

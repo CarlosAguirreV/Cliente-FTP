@@ -13,7 +13,7 @@ import org.apache.commons.net.ftp.FTPFile;
 /**
  * Clase Control. Controla todo el proceso de comunicación con el servidor FTP.
  *
- * @version 05/01/2019
+ * @version 14/01/2019
  * @author Carlos Aguirre Vozmediano
  */
 public class Control {
@@ -27,11 +27,14 @@ public class Control {
     private String contrasenia;
     private FTPClient clienteFtp;
     private HiloGenerico[] grupoDescarga;
+    private HiloGenerico[] grupoSubida;
     private HiloGenerico hiloConexion;
-    private boolean descargando;
+    private boolean descargando, subiendo;
     private boolean intentantoConectar;
     private int numeroArchivosDescargados;
     private int numeroArchivosADescargar;
+    private int numeroArchivosSubidos;
+    private int numeroArchivosASubir;
 
     /**
      * Contructor de la clase control. Se encarga de dejar todos los elementos
@@ -45,8 +48,12 @@ public class Control {
         this.cargarDatosSesionAnterior();
         this.vLogueo.mostrar(true);
         this.descargando = false;
+        this.subiendo = false;
         this.intentantoConectar = false;
         this.numeroArchivosADescargar = 0;
+        this.numeroArchivosDescargados = 0;
+        this.numeroArchivosASubir = 0;
+        this.numeroArchivosSubidos = 0;
     }
 
     // Comprueba si existe la carpeta de descargas y si no la crea.
@@ -62,7 +69,7 @@ public class Control {
      * @return Cadena con la ruta completa.
      */
     protected String getRutaCompletaDescargas() {
-        return carpetaDescargas.getAbsolutePath().toString();
+        return carpetaDescargas.getAbsolutePath();
     }
 
     /**
@@ -139,9 +146,7 @@ public class Control {
                 this.hiloConexion = new HiloGenerico(this, servidor, usuario, contrasenia);
                 this.crearHilo(this.hiloConexion);
             }
-
         }
-
     }
 
     /**
@@ -182,33 +187,71 @@ public class Control {
 
     /**
      * Sube los archivos seleccionados a la nube.
-     *
-     * @param archivos Listado de archivos que se subirán al servidor FTP.
      */
-    protected void subirArchivos(File[] archivos) {
-        this.vCliente.setEstado("Subiendo archivos...");
-        String cadenaResultado = "";
-        String errores = "";
-        boolean correcto = true;
+    protected void pulsadoSubir() {
 
-        for (File f : archivos) {
-            try (FileInputStream escritorRemoto = new FileInputStream(f.getPath())) {
-                if (!clienteFtp.storeFile(f.getName(), escritorRemoto)) {
-                    correcto = false;
-                    errores += f.getName() + " ";
+        // Cancelar subida
+        if (this.subiendo) {
+            this.anularSubidas();
+            // Empezar a subir si hay archivos
+        } else {
+            // Obtener los archivos
+            File archivos[] = this.vCliente.seleccionarArchivos();
+
+            if (archivos != null) {
+                this.numeroArchivosASubir = archivos.length;
+                this.subiendo = true;
+                this.vCliente.setSubiendo(true);
+                this.vCliente.setEstado("Subiendo archivos...");
+                this.grupoSubida = new HiloGenerico[this.numeroArchivosASubir];
+
+                HiloGenerico hiloTemporal;
+                int i = 0;
+                for (File archivo : archivos) {
+                    hiloTemporal = new HiloGenerico(this, servidor, usuario, contrasenia, archivo, getRutaActualRemota());
+                    this.grupoSubida[i] = hiloTemporal;
+                    this.crearHilo(hiloTemporal);
+                    i++;
                 }
-            } catch (Exception ex) {
-                correcto = false;
-                errores += f.getName() + " ";
-                System.out.println("ERROR: " + ex);
+            } else {
+                this.vCliente.setEstado("No hay nada que subir.");
             }
         }
-        if (correcto) {
-            cadenaResultado = "Archivos subidos correctamente.";
+    }
+
+    // Anula todas las subidas.
+    private void anularSubidas() {
+        this.subiendo = false;
+        this.vCliente.setSubiendo(false);
+        this.desconectarHilos(this.grupoSubida);
+        this.numeroArchivosASubir = 0;
+        this.numeroArchivosSubidos = 0;
+        this.vCliente.setEstado("Subidas canceladas.");
+        System.out.println("Subidas anuladas.");
+    }
+
+    /**
+     * Notifica que el archivo ha sido descargado, para llevar el control.
+     *
+     * @param valor Indica si se ha subido o no el archivo.
+     */
+    protected synchronized void archivoSubido(boolean valor) {
+        if (valor) {
+            this.numeroArchivosSubidos++;
         } else {
-            cadenaResultado += "Error al subir los siguientes elementos: " + errores;
+            this.numeroArchivosASubir -= 1;
         }
-        this.vCliente.setEstado(cadenaResultado);
+
+        if (numeroArchivosSubidos >= numeroArchivosASubir && this.subiendo == true) {
+            this.numeroArchivosSubidos = 0;
+            this.numeroArchivosASubir = 0;
+            this.subiendo = false;
+            this.vCliente.setSubiendo(false);
+
+            this.vCliente.setEstado("Archivos subidos correctamente.");
+            System.out.println("Todo subido.\n");
+        }
+
         this.refrescarListado();
     }
 
@@ -218,27 +261,27 @@ public class Control {
      * @param nombreArchivos Listado con los nombres de elementos que se van a
      * descargar.
      */
-    protected void bajarArchivos(List<String> nombreArchivos) {
+    protected void pulsadoDescargar(List<String> nombreArchivos) {
 
         // Cancelar descarga.
         if (this.descargando) {
             this.anularDescargas();
             // Empezar descargar si hay algo seleccionado.
         } else {
-            if (nombreArchivos.size() > 0) {
+            this.numeroArchivosADescargar = nombreArchivos.size();
+            if (this.numeroArchivosADescargar > 0) {
                 this.descargando = true;
                 this.vCliente.setDescargando(true);
                 this.vCliente.setEstado("Descargando archivos...");
                 this.comprobarDirectorioDescargas();
-                this.grupoDescarga = new HiloGenerico[nombreArchivos.size()];
-                this.numeroArchivosADescargar = nombreArchivos.size();
-                HiloGenerico hiloTemporal;
+                this.grupoDescarga = new HiloGenerico[this.numeroArchivosADescargar];
 
+                HiloGenerico hiloTemporal;
                 int i = 0;
                 for (String nombreArchivo : nombreArchivos) {
                     hiloTemporal = new HiloGenerico(this, servidor, usuario, contrasenia, nombreArchivo, getRutaActualRemota());
-                    grupoDescarga[i] = hiloTemporal;
-                    crearHilo(hiloTemporal);
+                    this.grupoDescarga[i] = hiloTemporal;
+                    this.crearHilo(hiloTemporal);
                     i++;
                 }
 
@@ -246,10 +289,9 @@ public class Control {
                 this.vCliente.setEstado("No hay nada que descargar.");
             }
         }
-
-        this.refrescarListado();
     }
 
+    // Anula las descargas.
     private void anularDescargas() {
         this.descargando = false;
         this.vCliente.setDescargando(false);
@@ -262,6 +304,8 @@ public class Control {
 
     /**
      * Notifica que el archivo ha sido descargado, para llevar el control.
+     *
+     * @param valor Indica si se ha bajado o no el archivo.
      */
     protected synchronized void archivoDescargado(boolean valor) {
         if (valor) {
@@ -269,15 +313,18 @@ public class Control {
         } else {
             this.numeroArchivosADescargar -= 1;
         }
-        
+
         if (numeroArchivosDescargados >= numeroArchivosADescargar && this.descargando == true) {
             this.numeroArchivosDescargados = 0;
+            this.numeroArchivosADescargar = 0;
             this.descargando = false;
             this.vCliente.setDescargando(false);
-            
+
             this.vCliente.setEstado("Archivos descargados correctamente.");
             System.out.println("Todo descargado.\n");
         }
+
+        this.refrescarBarraProgreso();
     }
 
     /**
@@ -320,7 +367,7 @@ public class Control {
             }
 
             if (correcto) {
-                cadenaResultado = "Archivos borrados correctamente.";
+                cadenaResultado = "Elementos borrados correctamente.";
             } else {
                 cadenaResultado += "No se pueden borrar los elementos: " + errores;
             }
@@ -359,6 +406,8 @@ public class Control {
      * @return boolean Si se ha podido o no refrescar.
      */
     protected boolean refrescarListado() {
+        this.refrescarBarraProgreso();
+
         String[] nombreElementos = null;
 
         try {
@@ -452,6 +501,11 @@ public class Control {
         this.vCliente.setRutaDirectoriosRemoto(getRutaActualRemota());
     }
 
+    /**
+     * Obtiene la ruta actual remota.
+     *
+     * @return Cadena con el nombre de la ruta remota.
+     */
     protected String getRutaActualRemota() {
         try {
             return this.clienteFtp.printWorkingDirectory();
@@ -460,6 +514,11 @@ public class Control {
         }
     }
 
+    /**
+     * Permite escribir un mensaje en la ventana cliente.
+     *
+     * @param mensaje Cadena con el mensaje.
+     */
     protected void setMensajeCliente(String mensaje) {
         this.vCliente.setEstado(mensaje);
     }
@@ -471,6 +530,7 @@ public class Control {
         System.out.println("INFO FTP: " + this.clienteFtp.getReplyString());
     }
 
+    // Inicia el hilo con el objeto pasado.
     private void crearHilo(HiloGenerico objetoHilo) {
         Thread hilo = new Thread(objetoHilo);
         hilo.start();
@@ -483,6 +543,14 @@ public class Control {
                 h.desconectarHilo();
             }
         }
+    }
+
+    // Controla la barra de progreso por numero de archivos subidos / descargados.
+    private void refrescarBarraProgreso() {
+        int archivosEnCola = this.numeroArchivosASubir + this.numeroArchivosADescargar;
+        int archivosTerminados = this.numeroArchivosSubidos + this.numeroArchivosDescargados;
+
+        this.vCliente.actualizarProgreso(archivosEnCola, archivosTerminados);
     }
 
     /**

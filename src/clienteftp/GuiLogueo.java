@@ -22,7 +22,7 @@ import javax.swing.WindowConstants;
  * Clase Logueo. Pide los datos de sesión al usuario para permitir la conexión
  * con el servidor FTP.
  *
- * @since 05/01/2019
+ * @since 14/01/2019
  * @author Carlos Aguirre Vozmediano
  */
 public class GuiLogueo extends JFrame {
@@ -41,6 +41,7 @@ public class GuiLogueo extends JFrame {
     protected static final Color COLOR_BOTONES = new Color(250, 217, 183);
     protected static final Color COLOR_BOTONES_CANCELAR = new Color(250, 190, 190);
     protected static final Color COLOR_LETRA = new Color(255, 255, 255);
+    protected static final Color COLOR_BARRA_PROGRESO = new Color(255, 127, 39);
     protected static final Cursor CURSOR_BOTONES = new Cursor(Cursor.HAND_CURSOR);
 
     /**
@@ -242,7 +243,7 @@ public class GuiLogueo extends JFrame {
     protected void setEstado(String estado) {
         this.lblEstado.setText(estado);
     }
-    
+
     /**
      * Si está intentando conectar mostrará una cosa en caso contrario otra.
      *
@@ -250,20 +251,27 @@ public class GuiLogueo extends JFrame {
      */
     protected void setIntentandoConectar(boolean conectando) {
         if (conectando) {
-            this.btnConectar.setText("Conectando...");
-            this.btnConectar.setToolTipText("Dejar de intentarlo.");
+            this.btnConectar.setText("Cancelar");
+            this.btnConectar.setToolTipText("Cancela la conexión.");
             this.btnConectar.setIcon(new ImageIcon(getClass().getResource("/recursos/cancelar.png")));
             this.btnConectar.setBackground(GuiLogueo.COLOR_BOTONES_CANCELAR);
-            this.btnLimpiar.setEnabled(false);
-            this.btnCargarSesion.setEnabled(false);
+            this.bloquearCampos(true);
         } else {
             this.btnConectar.setText("Conectar");
             this.btnConectar.setToolTipText("Intenta conectar con el servidor ftp");
             this.btnConectar.setIcon(new ImageIcon(getClass().getResource("/recursos/conectar.png")));
             this.btnConectar.setBackground(GuiLogueo.COLOR_BOTONES);
-            this.btnLimpiar.setEnabled(true);
-            this.btnCargarSesion.setEnabled(true);
+            this.bloquearCampos(false);
         }
+    }
+
+    // Bloquea o desbloquea los campos en función del parametro introducido.
+    private void bloquearCampos(boolean valor) {
+        this.txtServidor.setEditable(!valor);
+        this.txtUsuario.setEditable(!valor);
+        this.passContrasenia.setEditable(!valor);
+        this.btnLimpiar.setEnabled(!valor);
+        this.btnCargarSesion.setEnabled(!valor);
     }
 
     /**
